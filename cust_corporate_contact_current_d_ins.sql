@@ -1,0 +1,77 @@
+--共 375,058筆 record
+--共 194,240筆 不重複 ID_NO
+
+
+
+
+--CREATE OR REPLACE TABLE dev_temp.data_analyst.ins_cpcon_tmp AS
+WITH ins_cpcon_tmp AS (
+--非自然人集團客戶通訊資料
+SELECT
+    CAST(DA501.CUSTOMER_ID AS STRING) AS ID_NO, --統一編號
+    CAST('INS' AS STRING) AS SOURCE, --來源子公司別
+    CAST(DA501.ENTITY_HEAD_CTYCODE AS STRING) AS COUNTRY, --總部所在國別
+    CAST(COMM.CONTACT_TYPE AS STRING) AS CONTACT_TYPE,
+    CAST(COMM.CONTENT AS STRING) AS CONTENT,
+    CAST(1 AS STRING) AS STATUS,
+    CAST(CURRENT_DATE() AS TIMESTAMP_NTZ) AS LAST_MODIFIED_DATE,
+    CAST('2024-08-16' AS TIMESTAMP_NTZ) AS CREATE_DATE --這裡要改成首次建立的日期
+FROM(
+    SELECT *
+    FROM(
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY CUSTOMER_ID ORDER BY CHANGE_DATE_TIME DESC) AS rn
+        FROM raw_clean.ins.DTATA501
+        WHERE IDNTFCTN_TYPE IN ('4')
+        AND CUSTOMER_ID IN ( 
+            SELECT DISTINCT CUSTOMER_ID
+            FROM raw_clean.ins.DTABP001 DP001
+            JOIN raw_clean.ins.DTABP004 DP004
+            ON DP001.CONTRACT_NO = DP004.CONTRACT_NO
+            WHERE DP001.POLICY_STATUS = '7'
+            AND (DATE(DP001.END_DATETIME) >= CURRENT_DATE() OR DP001.END_DATETIME IS NULL)
+        )  --取出有效客戶
+    )
+    WHERE rn = 1 -- 取出每個 ID 最新一筆資料
+) AS DA501
+
+-------- 1 主要營業地址; 2 通訊地址 ; 3 公司電話 ; 4 手機號碼 ; 5 電子郵件 -------
+INNER JOIN (
+    SELECT DISTINCT ID, CONTACT_TYPE, CONTENT 
+    FROM(
+        --  以下待 DTABP005 落檔
+        /*  
+        -- 主要營業地址 (CONTACT_TYPE = 1)
+        SELECT CUSTOMER_ID AS ID, '1' AS CONTACT_TYPE, ADDRESS AS CONTENT
+        FROM raw_clean.ins.DTABP005
+        WHERE ADDRESS_KIND = '3'
+        AND ADDRESS <> ''
+        AND ADDRESS IS NOT NULL
+        UNION ALL
+        -- 通訊地址 (CONTACT_TYPE = 2)
+        SELECT CUSTOMER_ID AS ID, '2' AS CONTACT_TYPE, ADDRESS AS CONTENT
+        FROM raw_clean.ins.DTABP005
+        WHERE ADDRESS_KIND = '2'
+        AND ADDRESS <> '' AND ADDRESS IS NOT NULL
+        UNION ALL
+        -- 公司電話 (CONTACT_TYPE = 3)
+        SELECT CUSTOMER_ID AS ID, '3' AS CONTACT_TYPE, PHONE1 AS CONTENT
+        FROM raw_clean.ins.DTABP005
+        WHERE PHONE1 <> '' AND PHONE1 IS NOT NULL
+        UNION ALL
+        */
+        -- 手機號碼 (CONTACT_TYPE = 4) ---- 遮罩後的格式應該符合需求
+        SELECT CUSTOMER_ID AS ID, '5' AS CONTACT_TYPE, CELLULAR_PHONE AS CONTENT
+        FROM raw_clean.ins.DTATA501
+        WHERE CELLULAR_PHONE <> '' AND CELLULAR_PHONE IS NOT NULL
+        UNION ALL
+        -- 電子郵件 (CONTACT_TYPE = 5) ---全部都被遮了
+        SELECT CUSTOMER_ID AS ID, '6' AS CONTACT_TYPE, EMAIL AS CONTENT
+        FROM raw_clean.ins.DTATA501
+        WHERE EMAIL <> '' AND EMAIL IS NOT NULL
+    ) temp
+) COMM
+ON DA501.CUSTOMER_ID = COMM.ID
+)
+
+SELECT *
+FROM ins_cpcon_tmp
