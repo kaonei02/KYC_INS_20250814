@@ -29,7 +29,7 @@ SELECT
     '' AS O_NAME, --別名
     '' AS EDUCATION_CODE,--教育程度  -- 只有兩筆是4
     CAST(DA501.OCCU_TYPE1_CODE AS STRING) AS INDUSTRY_TYPE1,--行職業大項 --以兩碼數字呈現 --需要代碼轉換config
-    CAST(DA501.OCCU_TYPE3_CODE AS STRING) AS INDUSTRY_TYPE2,--行職業小項 --以七碼數字呈現 --需要代碼轉換config
+    CAST(DA501.OCCU_TYPE2_CODE AS STRING) AS INDUSTRY_TYPE2,--行職業小項 --以七碼數字呈現 --需要代碼轉換config
     '' AS SERVICES,--任職機構
     CASE DA501.RISK_JOBTITLE_CODE
         WHEN 'T010' THEN '一般職員'
